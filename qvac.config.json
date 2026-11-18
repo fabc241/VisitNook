@@ -1,0 +1,7 @@
+{
+  "plugins": [
+    "@qvac/sdk/parakeet-transcription/plugin",
+    "@qvac/sdk/llamacpp-completion/plugin",
+    "@qvac/sdk/llamacpp-embedding/plugin"
+  ]
+}

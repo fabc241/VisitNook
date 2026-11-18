@@ -1,25 +1,52 @@
 {
   "expo": {
-    "name": "visit-notes",
+    "name": "Visit Notes",
     "slug": "visit-notes",
+    "scheme": "visitnotes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "platforms": [
+      "ios"
+    ],
     "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+      "bundleIdentifier": "com.visitnotes.app",
+      "appleTeamId": "5CYK686SKS",
+      "supportsTablet": false,
+      "entitlements": {
+        "com.apple.developer.default-data-protection": "NSFileProtectionComplete"
       },
-      "predictiveBackGestureEnabled": false
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "expo-router",
+      "@qvac/sdk/expo-plugin",
+      "expo-build-properties",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Visit Notes records your doctor visits so they can be transcribed and summarized on this iPhone. Audio never leaves your device.",
+          "enableBackgroundRecording": true,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Visit Notes adds follow-up appointments your doctor mentioned, only after you confirm each one."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Visit Notes uses Face ID to keep your visit records private."
+        }
+      ],
+      "expo-sharing",
+      "expo-asset"
+    ]
   }
 }
