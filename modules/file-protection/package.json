@@ -1,0 +1,10 @@
+{
+  "name": "file-protection",
+  "version": "1.0.0",
+  "description": "iOS data-protection class and backup-exclusion helpers for Visit Notes",
+  "main": "index.ts",
+  "private": true,
+  "license": "MIT",
+  "author": "Visit Notes",
+  "homepage": "https://github.com/expo/expo"
+}
