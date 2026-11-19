@@ -1,4 +1,5 @@
 import { requestRecordingPermissionsAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -93,6 +94,7 @@ export default function RecordScreen() {
         durationMs,
       });
       setLastVisit(visit);
+      router.push({ pathname: '/visit/[id]', params: { id: visit.id } });
     } catch (error) {
       Alert.alert('Could not save the recording', errorMessage(error));
     } finally {
@@ -133,6 +135,13 @@ export default function RecordScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Last recording</Text>
           <VisitPlayback key={lastVisit.id} visit={lastVisit} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/visit/[id]', params: { id: lastVisit.id } })}
+            style={({ pressed }) => [styles.openButton, pressed && styles.dim]}
+          >
+            <Text style={styles.openText}>Open visit & transcript</Text>
+          </Pressable>
         </View>
       ) : null}
     </ScrollView>
@@ -159,5 +168,13 @@ const styles = StyleSheet.create({
   recordButtonText: { color: 'white', fontSize: 18, fontWeight: '600' },
   dim: { opacity: 0.6 },
   section: { alignSelf: 'stretch', marginTop: 24, gap: 8 },
+  openButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1F6FEB',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  openText: { color: '#1F6FEB', fontSize: 16, fontWeight: '600' },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: '#888', textTransform: 'uppercase' },
 });

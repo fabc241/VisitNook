@@ -2,9 +2,22 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import FileProtection from '../../modules/file-protection';
 
-export type VisitStatus = 'recorded';
+export type VisitStatus = 'recorded' | 'transcribed';
 
-/** Stored as `visits/<id>/visit.json`. Later steps add transcript, summary, etc. */
+/** One stretch of speech by one voice. `speakerId` is zero-based, from the diarization model. */
+export type Turn = {
+  speakerId: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+};
+
+export type SpeakerRole = 'me' | 'doctor';
+
+/** speakerId (as a string key) → who that voice is. Set on the "Which voice is yours?" screen. */
+export type SpeakerMap = Record<string, SpeakerRole>;
+
+/** Stored as `visits/<id>/visit.json`. Later steps add summary, next steps, etc. */
 export type Visit = {
   id: string;
   /** ISO timestamp of when the recording started. */
@@ -12,6 +25,10 @@ export type Visit = {
   title: string;
   durationMs: number;
   status: VisitStatus;
+  turns?: Turn[];
+  speakerMap?: SpeakerMap;
+  /** ISO timestamp of the last successful transcription. */
+  transcribedAt?: string;
 };
 
 const AUDIO_FILE = 'audio.wav';
@@ -81,6 +98,20 @@ export async function saveRecordedVisit(params: {
 export function writeVisit(visit: Visit): void {
   const file = new File(visitDirectory(visit.id), VISIT_FILE);
   file.write(JSON.stringify(visit, null, 2));
+}
+
+/** Reads, changes and writes back one visit. Throws if the visit does not exist. */
+export async function updateVisit(id: string, change: (visit: Visit) => Visit): Promise<Visit> {
+  const current = await getVisit(id);
+  if (!current) throw new Error('This visit no longer exists.');
+  const next = change(current);
+  writeVisit(next);
+  return next;
+}
+
+/** A plain filesystem path (no `file://`) for native code such as the QVAC worker. */
+export function toFilePath(uri: string): string {
+  return decodeURIComponent(uri.replace(/^file:\/\//, ''));
 }
 
 export async function getVisit(id: string): Promise<Visit | null> {

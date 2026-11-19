@@ -32,6 +32,8 @@ export default function RootLayout() {
       <Stack>
         <Stack.Protected guard={ready} redirectTo="/setup">
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="visit/[id]/index" options={{ title: 'Visit', headerBackTitle: 'Back' }} />
+          <Stack.Screen name="visit/[id]/speakers" options={{ title: 'Which voice is yours?' }} />
         </Stack.Protected>
         <Stack.Screen name="setup" options={{ title: 'Models', headerShown: ready }} />
       </Stack>
