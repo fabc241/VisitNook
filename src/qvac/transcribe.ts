@@ -2,7 +2,14 @@ import { cancel, transcribe, type TranscribeSegment } from '@qvac/sdk';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSyncExternalStore } from 'react';
 
-import { toFilePath, updateVisit, visitAudioFile, type Turn, type Visit } from '../storage/visits';
+import {
+  toFilePath,
+  updateVisit,
+  visitAudioFile,
+  withoutSummary,
+  type Turn,
+  type Visit,
+} from '../storage/visits';
 import { LOAD_SPECS, errorMessage, unloadAll, withModels } from './models';
 
 // ---------------------------------------------------------------------------
@@ -98,8 +105,9 @@ export async function transcribeVisit(visitId: string): Promise<Visit | null> {
     if (cancelled) throw new Error('Cancelled');
 
     const turns = segmentsToTurns(segments);
+    // The old summary was written from the old transcript, so it goes too.
     const visit = await updateVisit(visitId, (v) => ({
-      ...v,
+      ...withoutSummary(v),
       status: 'transcribed',
       turns,
       speakerMap: undefined,

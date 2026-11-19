@@ -2,7 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import FileProtection from '../../modules/file-protection';
 
-export type VisitStatus = 'recorded' | 'transcribed';
+export type VisitStatus = 'recorded' | 'transcribed' | 'summarized';
 
 /** One stretch of speech by one voice. `speakerId` is zero-based, from the diarization model. */
 export type Turn = {
@@ -17,7 +17,19 @@ export type SpeakerRole = 'me' | 'doctor';
 /** speakerId (as a string key) → who that voice is. Set on the "Which voice is yours?" screen. */
 export type SpeakerMap = Record<string, SpeakerRole>;
 
-/** Stored as `visits/<id>/visit.json`. Later steps add summary, next steps, etc. */
+/** One summary line, with the doctor's words that support it. */
+export type SummaryItem = {
+  text: string;
+  /** A quote of what the doctor said. Checked against the transcript in the safety step. */
+  evidence: string;
+};
+
+export type FollowUpUnit = 'days' | 'weeks' | 'months' | 'years';
+export type FollowUp = { amount: number; unit: FollowUpUnit };
+
+export type NextStep = SummaryItem & { followUp?: FollowUp };
+
+/** Stored as `visits/<id>/visit.json`. Later steps add removed items, reminders, etc. */
 export type Visit = {
   id: string;
   /** ISO timestamp of when the recording started. */
@@ -29,6 +41,10 @@ export type Visit = {
   speakerMap?: SpeakerMap;
   /** ISO timestamp of the last successful transcription. */
   transcribedAt?: string;
+  summary?: SummaryItem[];
+  nextSteps?: NextStep[];
+  /** ISO timestamp of the last successful summary. */
+  summarizedAt?: string;
 };
 
 const AUDIO_FILE = 'audio.wav';
@@ -107,6 +123,12 @@ export async function updateVisit(id: string, change: (visit: Visit) => Visit): 
   const next = change(current);
   writeVisit(next);
   return next;
+}
+
+/** The visit without its summary. Used whenever the transcript or the voice choice changes. */
+export function withoutSummary(visit: Visit): Visit {
+  const { summary: _summary, nextSteps: _nextSteps, summarizedAt: _summarizedAt, ...rest } = visit;
+  return { ...rest, status: rest.turns ? 'transcribed' : rest.status };
 }
 
 /** A plain filesystem path (no `file://`) for native code such as the QVAC worker. */

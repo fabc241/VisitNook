@@ -5,11 +5,18 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useClipPlayer } from '../../../audio/useClipPlayer';
 import { VisitPlayback } from '../../../components/VisitPlayback';
 import {
+  clearSummaryError,
+  summarizeVisit,
+  useSummaryJob,
+  type SummaryPhase,
+} from '../../../qvac/summarize';
+import {
   clearTranscriptionError,
   transcribeVisit,
   useTranscriptionJob,
 } from '../../../qvac/transcribe';
-import { getVisit, type Visit } from '../../../storage/visits';
+import { getVisit, type NextStep, type SummaryItem, type Visit } from '../../../storage/visits';
+import { hasDoctorLines } from '../../../summary/transcript';
 import { roleOf, speakerLabel, speakerOverview } from '../../../transcript/speakers';
 import { formatDuration } from '../../../utils/time';
 
@@ -17,6 +24,7 @@ export default function VisitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [visit, setVisit] = useState<Visit | null | undefined>(undefined);
   const job = useTranscriptionJob(id);
+  const summaryJob = useSummaryJob(id);
 
   const reload = useCallback(() => {
     getVisit(id)
@@ -26,10 +34,10 @@ export default function VisitScreen() {
 
   // Reload when coming back from the speaker screen…
   useFocusEffect(reload);
-  // …and when a transcription finishes.
+  // …and when a transcription or summary finishes.
   useEffect(() => {
-    if (job === null) reload();
-  }, [job, reload]);
+    if (job === null && summaryJob === null) reload();
+  }, [job, summaryJob, reload]);
 
   if (visit === undefined) {
     return <ActivityIndicator style={styles.loading} />;
@@ -75,12 +83,13 @@ export default function VisitScreen() {
         </View>
       ) : null}
 
-      {!running && visit.status === 'transcribed' && (
+      {!running && visit.status !== 'recorded' && (
         <>
           {turns.length === 0 ? (
             <Text style={styles.body}>No speech was found in this recording.</Text>
           ) : (
             <>
+              {visit.speakerMap && <SummarySection visit={visit} />}
               {!visit.speakerMap ? (
                 <View style={[styles.card, styles.callout]}>
                   <Text style={styles.cardTitle}>Which voice is yours?</Text>
@@ -143,6 +152,145 @@ function Transcribing({
   );
 }
 
+function SummarySection({ visit }: { visit: Visit }) {
+  const job = useSummaryJob(visit.id);
+
+  if (job?.state === 'running') {
+    return <Summarizing startedAt={job.startedAt} phase={job.phase} onCancel={job.cancel} />;
+  }
+  if (job?.state === 'failed') {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.error}>The summary could not be written: {job.error}</Text>
+        <Pressable
+          style={styles.primary}
+          onPress={() => {
+            clearSummaryError(visit.id);
+            void summarizeVisit(visit.id);
+          }}
+        >
+          <Text style={styles.primaryText}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (!visit.summary || !visit.nextSteps) {
+    if (!hasDoctorLines(visit.turns ?? [], visit.speakerMap)) {
+      return (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Summary</Text>
+          <Text style={styles.body}>
+            Every line is marked as you, so there is nothing from your doctor to summarize. If that
+            is wrong, change which voice is yours below.
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Summary</Text>
+        <Text style={styles.body}>
+          Write a plain-English summary of what your doctor said, and the next steps they gave you.
+          This runs on this iPhone and can take a few minutes.
+        </Text>
+        <Pressable style={styles.primary} onPress={() => void summarizeVisit(visit.id)}>
+          <Text style={styles.primaryText}>Write summary</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>What your doctor said</Text>
+        {visit.summary.length === 0 ? (
+          <Text style={styles.body}>No summary points were found in this visit.</Text>
+        ) : (
+          visit.summary.map((item, i) => <SummaryLine key={i} item={item} />)
+        )}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Next steps</Text>
+        {visit.nextSteps.length === 0 ? (
+          <Text style={styles.body}>Your doctor did not give any next steps in this recording.</Text>
+        ) : (
+          visit.nextSteps.map((item, i) => <SummaryLine key={i} item={item} />)
+        )}
+      </View>
+      <Text style={styles.disclaimer}>
+        Written on this iPhone from the recording. It can contain mistakes. It is not medical advice;
+        check with your doctor if anything is unclear.
+      </Text>
+      <Pressable style={styles.secondary} onPress={() => void summarizeVisit(visit.id)}>
+        <Text style={styles.secondaryText}>Write the summary again</Text>
+      </Pressable>
+    </>
+  );
+}
+
+function SummaryLine({ item }: { item: SummaryItem | NextStep }) {
+  const followUp = 'followUp' in item ? item.followUp : undefined;
+  return (
+    <View style={styles.item}>
+      <Text style={styles.itemText}>• {item.text}</Text>
+      {followUp && (
+        <Text style={styles.followUp}>
+          In {followUp.amount} {followUp.amount === 1 ? followUp.unit.replace(/s$/, '') : followUp.unit}
+        </Text>
+      )}
+      <Text style={styles.evidence}>Doctor: “{item.evidence}”</Text>
+    </View>
+  );
+}
+
+function phaseText(phase: SummaryPhase): string {
+  switch (phase.kind) {
+    case 'loading':
+      return 'Loading the language model…';
+    case 'measuring':
+      return 'Reading the transcript…';
+    case 'writing':
+      return phase.parts > 1
+        ? `Writing the summary, part ${phase.part} of ${phase.parts}…`
+        : 'Writing the summary…';
+    case 'merging':
+      return 'Putting the parts together…';
+  }
+}
+
+function Summarizing({
+  startedAt,
+  phase,
+  onCancel,
+}: {
+  startedAt: number;
+  phase: SummaryPhase;
+  onCancel: () => void;
+}) {
+  const [now, setNow] = useState(startedAt);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.row}>
+        <ActivityIndicator />
+        <Text style={styles.cardTitle}>{phaseText(phase)}</Text>
+      </View>
+      <Text style={styles.body}>
+        {formatDuration(now - startedAt)} elapsed. Keep the app open; the screen stays on while
+        this runs.
+      </Text>
+      <Pressable style={styles.secondary} onPress={onCancel}>
+        <Text style={styles.secondaryText}>Cancel</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Transcript({ visit }: { visit: Visit }) {
   const clips = useClipPlayer(visit.id);
   return (
@@ -197,6 +345,11 @@ const styles = StyleSheet.create({
     borderColor: '#1F6FEB',
   },
   secondaryText: { color: '#1F6FEB', fontSize: 16, fontWeight: '600' },
+  item: { gap: 3 },
+  itemText: { fontSize: 16, lineHeight: 22, color: '#24292F' },
+  followUp: { fontSize: 14, fontWeight: '600', color: '#1A7F37', marginLeft: 12 },
+  evidence: { fontSize: 13, lineHeight: 18, color: '#888', fontStyle: 'italic', marginLeft: 12 },
+  disclaimer: { fontSize: 13, lineHeight: 18, color: '#888' },
   transcript: { gap: 8, marginTop: 4 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: '#888', textTransform: 'uppercase' },
   turn: { borderRadius: 12, padding: 12, gap: 4, backgroundColor: 'rgba(127,127,127,0.08)' },

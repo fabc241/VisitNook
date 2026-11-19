@@ -9,6 +9,9 @@ import {
 } from '@qvac/sdk';
 
 import { MODELS, type CatalogModel, type ModelKey } from './catalog';
+import { SUMMARY_SYSTEM_PROMPT } from './prompts';
+
+export const SUMMARY_CTX_SIZE = 8192;
 
 // ---------------------------------------------------------------------------
 // Cache status
@@ -106,6 +109,14 @@ export const LOAD_SPECS = {
   medpsy: {
     id: 'medpsy:ctx8192',
     options: { modelSrc: MODELS[2].descriptor, modelType: 'llm', modelConfig: { ctx_size: 8192 } },
+  },
+  summary: {
+    id: 'medpsy:ctx8192:summary-v1',
+    options: {
+      modelSrc: MODELS[2].descriptor,
+      modelType: 'llm',
+      modelConfig: { ctx_size: SUMMARY_CTX_SIZE, system_prompt: SUMMARY_SYSTEM_PROMPT, temp: 0.2 },
+    },
   },
   embedder: {
     id: 'embeddinggemma',

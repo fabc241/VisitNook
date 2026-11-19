@@ -4,7 +4,9 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 
 import { useClipPlayer } from '../../../audio/useClipPlayer';
 import { errorMessage } from '../../../qvac/models';
-import { getVisit, updateVisit, type Visit } from '../../../storage/visits';
+import { summarizeVisit } from '../../../qvac/summarize';
+import { getVisit, updateVisit, withoutSummary, type Visit } from '../../../storage/visits';
+import { hasDoctorLines } from '../../../summary/transcript';
 import { buildSpeakerMap, meSpeakerId, speakerOverview } from '../../../transcript/speakers';
 import { formatDuration } from '../../../utils/time';
 
@@ -33,7 +35,14 @@ export default function SpeakersScreen() {
     clips.stop();
     setSaving(true);
     try {
-      await updateVisit(visit.id, (v) => ({ ...v, speakerMap: buildSpeakerMap(turns, me) }));
+      const speakerMap = buildSpeakerMap(turns, me);
+      const changed = JSON.stringify(speakerMap) !== JSON.stringify(visit.speakerMap);
+      // A new voice choice changes who said what, so only the summary is redone.
+      const saved = await updateVisit(visit.id, (v) => ({
+        ...(changed ? withoutSummary(v) : v),
+        speakerMap,
+      }));
+      if (!saved.summary && hasDoctorLines(turns, speakerMap)) void summarizeVisit(visit.id);
       router.back();
     } catch (error) {
       setSaving(false);
