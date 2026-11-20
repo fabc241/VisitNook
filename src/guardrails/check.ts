@@ -254,20 +254,36 @@ export function isSupported(entity: Entity, facts: DoctorFacts): boolean {
   }
 }
 
-function entityReason(entity: Entity): string {
+/** "a medicine (metformin)", "a dose (500 mg)" … */
+function describeEntity(entity: Entity): string {
   switch (entity.kind) {
     case 'medicine':
     case 'category':
-      return `Mentions a medicine (${entity.label}) the doctor did not say.`;
+      return `a medicine (${entity.label})`;
     case 'dose':
-      return `Mentions a dose (${entity.label}) the doctor did not say.`;
+      return `a dose (${entity.label})`;
     case 'frequency':
-      return `Mentions how often (${entity.label}) the doctor did not say.`;
+      return `how often (${entity.label})`;
     case 'test':
-      return `Mentions a test (${entity.label}) the doctor did not say.`;
+      return `a test (${entity.label})`;
     case 'condition':
-      return `Mentions a condition (${entity.label}) the doctor did not say.`;
+      return `a condition (${entity.label})`;
   }
+}
+
+function entityReason(entity: Entity): string {
+  return `Mentions ${describeEntity(entity)} the doctor did not say.`;
+}
+
+/**
+ * For chat answers: the first medicine, dose, schedule, test or condition in
+ * `text` that none of `sources` names, as a reason the patient can read, or
+ * `null` when everything named is in the sources.
+ */
+export function unsupportedMention(text: string, sources: string[]): string | null {
+  const facts = doctorFacts(sources.map((source) => ({ speaker: 'Doctor' as const, text: source })));
+  const entity = extractEntities(text).find((e) => !isSupported(e, facts));
+  return entity ? `It mentions ${describeEntity(entity)} that is not in your visit notes.` : null;
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { HighlightedText } from '../../components/HighlightedText';
+import { forgetVisit } from '../../qvac/rag';
 import { useSummaryJob } from '../../qvac/summarize';
 import { useTranscriptionJob } from '../../qvac/transcribe';
 import {
@@ -82,7 +83,7 @@ export default function VisitsScreen() {
       }
       Alert.alert(
         'Delete this visit?',
-        `“${visit.title}” — the recording, transcript and summary will be removed from this iPhone. This cannot be undone.`,
+        `“${visit.title}” — the recording, transcript, summary and its search data will be removed from this iPhone. This cannot be undone.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -91,6 +92,7 @@ export default function VisitsScreen() {
             onPress: () => {
               try {
                 deleteVisit(visit.id);
+                void forgetVisit(visit.id);
               } catch (error) {
                 Alert.alert('Could not delete', error instanceof Error ? error.message : String(error));
               }

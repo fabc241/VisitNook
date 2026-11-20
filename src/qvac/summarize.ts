@@ -21,6 +21,7 @@ import {
   mergeMessage,
   type TranscriptPart,
 } from './prompts';
+import { refreshIndexInBackground } from './rag';
 
 // ---------------------------------------------------------------------------
 // Token budget
@@ -238,6 +239,7 @@ export async function summarizeVisit(visitId: string): Promise<Visit | null> {
 
   await activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
   const started = Date.now();
+  let indexAfter = false;
   try {
     const visit = await getVisit(visitId);
     if (!visit?.turns?.length) throw new Error('This visit has no transcript yet.');
@@ -295,6 +297,7 @@ export async function summarizeVisit(visitId: string): Promise<Visit | null> {
       };
     });
     setJob(visitId, null);
+    indexAfter = saved.status === 'summarized';
     return saved;
   } catch (error) {
     if (cancelled || error instanceof CancelledError) {
@@ -307,6 +310,8 @@ export async function summarizeVisit(visitId: string): Promise<Visit | null> {
   } finally {
     deactivateKeepAwake(KEEP_AWAKE_TAG);
     await unloadAll().catch(() => undefined);
+    // Makes the new summary searchable in "Ask" (MedPsy is unloaded first).
+    if (indexAfter) refreshIndexInBackground();
   }
 }
 

@@ -9,9 +9,11 @@ import {
 } from '@qvac/sdk';
 
 import { MODELS, type CatalogModel, type ModelKey } from './catalog';
-import { SUMMARY_SYSTEM_PROMPT } from './prompts';
+import { CHAT_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from './prompts';
 
 export const SUMMARY_CTX_SIZE = 8192;
+/** Smaller than the summary's: five short excerpts fit, and it leaves room for the embedder. */
+export const CHAT_CTX_SIZE = 4096;
 
 // ---------------------------------------------------------------------------
 // Cache status
@@ -118,6 +120,21 @@ export const LOAD_SPECS = {
       modelConfig: { ctx_size: SUMMARY_CTX_SIZE, system_prompt: SUMMARY_SYSTEM_PROMPT, temp: 0.2 },
     },
   },
+  chat: {
+    id: 'medpsy:ctx4096:chat-v2',
+    options: {
+      modelSrc: MODELS[2].descriptor,
+      modelType: 'llm',
+      modelConfig: {
+        ctx_size: CHAT_CTX_SIZE,
+        system_prompt: CHAT_SYSTEM_PROMPT,
+        temp: 0.2,
+        // Answers quote short excerpts; thinking first only made each answer
+        // minutes slower on the phone.
+        reasoning_budget: 0,
+      },
+    },
+  },
   embedder: {
     id: 'embeddinggemma',
     options: { modelSrc: MODELS[3].descriptor, modelType: 'llamacpp-embedding' },
@@ -129,7 +146,7 @@ const loaded = new Map<string, string>();
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Runs `fn` after every previously queued operation has settled. */
-function runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+export function runExclusive<T>(fn: () => Promise<T>): Promise<T> {
   const next = queue.then(fn, fn);
   queue = next.catch(() => undefined);
   return next;

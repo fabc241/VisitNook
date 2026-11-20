@@ -166,7 +166,7 @@ export async function getVisit(id: string): Promise<Visit | null> {
 
 /**
  * Permanently removes `visits/<id>/` (audio, transcript and summary).
- * The "Ask" step will also remove the visit's search documents here.
+ * Callers also call `forgetVisit(id)` (src/qvac/rag.ts) to remove its search documents.
  */
 export function deleteVisit(id: string): void {
   const dir = visitDirectory(id);
