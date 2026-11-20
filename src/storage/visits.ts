@@ -164,6 +164,15 @@ export async function getVisit(id: string): Promise<Visit | null> {
   return JSON.parse(await file.text()) as Visit;
 }
 
+/**
+ * Permanently removes `visits/<id>/` (audio, transcript and summary).
+ * The "Ask" step will also remove the visit's search documents here.
+ */
+export function deleteVisit(id: string): void {
+  const dir = visitDirectory(id);
+  if (dir.exists) dir.delete();
+}
+
 /** All visits, newest first. Folders without a readable `visit.json` are skipped. */
 export async function listVisits(): Promise<Visit[]> {
   if (!visitsRoot.exists) return [];

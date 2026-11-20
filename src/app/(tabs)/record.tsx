@@ -1,6 +1,6 @@
 import { requestRecordingPermissionsAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -23,11 +23,14 @@ export default function RecordScreen() {
   const [lastVisit, setLastVisit] = useState<Visit | null>(null);
   const session = useRef<{ id: string; startedAt: Date } | null>(null);
 
-  useEffect(() => {
-    listVisits()
-      .then((visits) => setLastVisit(visits[0] ?? null))
-      .catch(() => setLastVisit(null));
-  }, []);
+  // Reload on focus so a visit deleted from the Visits tab disappears here too.
+  useFocusEffect(
+    useCallback(() => {
+      listVisits()
+        .then((visits) => setLastVisit(visits[0] ?? null))
+        .catch(() => setLastVisit(null));
+    }, []),
+  );
 
   const askForConsent = () => {
     Alert.alert(
