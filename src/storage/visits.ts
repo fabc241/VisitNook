@@ -43,6 +43,13 @@ export type RemovedItem = {
   reason: string;
 };
 
+/**
+ * A question the patient asked that the doctor did not answer, for the Prep
+ * tab. `evidence` is the patient's own words from the transcript; `text` is
+ * a shorter wording of it (or the same words when no rewrite passed the check).
+ */
+export type OpenQuestion = { id: string; text: string; evidence: string };
+
 /** Stored as `visits/<id>/visit.json`. Later steps add removed items, reminders, etc. */
 export type Visit = {
   id: string;
@@ -61,6 +68,10 @@ export type Visit = {
   removed?: RemovedItem[];
   /** ISO timestamp of the last successful summary. */
   summarizedAt?: string;
+  /** Unanswered patient questions, found for the summary saved at `openQuestionsFor`. */
+  openQuestions?: OpenQuestion[];
+  /** The `summarizedAt` the open questions belong to; a newer summary means they are looked for again. */
+  openQuestionsFor?: string;
 };
 
 const AUDIO_FILE = 'audio.wav';
@@ -148,6 +159,8 @@ export function withoutSummary(visit: Visit): Visit {
     nextSteps: _nextSteps,
     removed: _removed,
     summarizedAt: _summarizedAt,
+    openQuestions: _openQuestions,
+    openQuestionsFor: _openQuestionsFor,
     ...rest
   } = visit;
   return { ...rest, status: rest.turns ? 'transcribed' : rest.status };

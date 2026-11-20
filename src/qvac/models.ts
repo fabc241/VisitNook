@@ -9,11 +9,13 @@ import {
 } from '@qvac/sdk';
 
 import { MODELS, type CatalogModel, type ModelKey } from './catalog';
-import { CHAT_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from './prompts';
+import { CHAT_SYSTEM_PROMPT, PREP_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from './prompts';
 
 export const SUMMARY_CTX_SIZE = 8192;
 /** Smaller than the summary's: five short excerpts fit, and it leaves room for the embedder. */
 export const CHAT_CTX_SIZE = 4096;
+/** Prep sends a few short excerpts around each question, so the chat size is enough. */
+export const PREP_CTX_SIZE = 4096;
 
 // ---------------------------------------------------------------------------
 // Cache status
@@ -131,6 +133,20 @@ export const LOAD_SPECS = {
         temp: 0.2,
         // Answers quote short excerpts; thinking first only made each answer
         // minutes slower on the phone.
+        reasoning_budget: 0,
+      },
+    },
+  },
+  prep: {
+    id: 'medpsy:ctx4096:prep-v1',
+    options: {
+      modelSrc: MODELS[2].descriptor,
+      modelType: 'llm',
+      modelConfig: {
+        ctx_size: PREP_CTX_SIZE,
+        system_prompt: PREP_SYSTEM_PROMPT,
+        temp: 0.1,
+        // A yes/no per question with a short rewording; reasoning first only costs time.
         reasoning_budget: 0,
       },
     },

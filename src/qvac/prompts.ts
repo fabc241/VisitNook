@@ -106,3 +106,52 @@ export function chatMessage(excerpts: ChatExcerpt[], question: string): string {
   const blocks = excerpts.map((e) => `[${e.label}]\n${e.texts.join('\n…\n')}`);
   return `<excerpts>\n${blocks.join('\n\n---\n\n')}\n</excerpts>\n\nQuestion: ${question.trim()}\n\nAnswer from the excerpts only, with a visit label after each sentence.`;
 }
+
+// ---------------------------------------------------------------------------
+// Visit prep
+// ---------------------------------------------------------------------------
+
+/** Load-time `system_prompt` for finding questions the doctor did not answer. */
+export const PREP_SYSTEM_PROMPT = `You help a patient get ready for their next doctor visit. You are given excerpts from a past visit transcript. Each line starts with "Doctor:" (the doctor or another clinician) or "Patient:" (the patient). Questions the patient asked are marked with a number in square brackets, such as [Q3].
+
+For every marked question, decide if it is still open.
+
+Rules:
+1. "open" is true only if the question is about the patient's health, body, medicines, tests, treatment or care, and the doctor did not answer it in the excerpt. A short or partial answer counts as answered. If the doctor said they would answer it later, changed the subject, or did not reply, it is open.
+2. Small talk, greetings, and questions that only check they heard right ("Sorry, what?", "Is that right?") are not open.
+3. If "open" is true, "text" is the patient's question written again as one short, clear question in the patient's own voice, with "I" and "my", for example "Can I take my pills at night?". Keep the patient's meaning and the patient's own words for medical things. Do not add anything that is not in the patient's question: no medicines, tests, doses, time frames or ideas. If "open" is false, "text" is "".
+4. Never answer the questions. Never write new questions of your own.
+5. Include every marked question exactly once, in order, by its number.
+6. Reply with JSON only, no other text, in exactly this shape:
+{"questions":[{"q":1,"open":true,"text":"..."},{"q":2,"open":false,"text":""}]}`;
+
+/** The user turn: one or more excerpts of the same visit, each with marked questions. */
+export function prepMessage(excerpts: string[]): string {
+  return `<excerpts>\n${excerpts.join('\n\n---\n\n')}\n</excerpts>\n\nReply with the JSON now.`;
+}
+
+export const PREP_STRICT_JSON_REMINDER =
+  'Your last answer could not be read. Reply with one JSON object only: no words before or after it, no code fences, no comments. Use double quotes. It must have a "questions" list with one entry per marked question.';
+
+/** Constrains the first attempt's output with a grammar built from this schema. */
+export const PREP_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    questions: {
+      type: 'array',
+      maxItems: 12,
+      items: {
+        type: 'object',
+        properties: {
+          q: { type: 'integer' },
+          open: { type: 'boolean' },
+          text: { type: 'string' },
+        },
+        required: ['q', 'open', 'text'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['questions'],
+  additionalProperties: false,
+} as const;
