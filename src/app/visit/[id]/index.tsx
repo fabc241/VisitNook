@@ -4,8 +4,10 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { useClipPlayer } from '../../../audio/useClipPlayer';
 import { VisitPlayback } from '../../../components/VisitPlayback';
+import { checkSummary, describeFollowUp, type CheckedSummary } from '../../../guardrails/check';
 import {
   clearSummaryError,
+  ensureSafetyChecked,
   summarizeVisit,
   useSummaryJob,
   type SummaryPhase,
@@ -15,8 +17,14 @@ import {
   transcribeVisit,
   useTranscriptionJob,
 } from '../../../qvac/transcribe';
-import { getVisit, type NextStep, type SummaryItem, type Visit } from '../../../storage/visits';
-import { hasDoctorLines } from '../../../summary/transcript';
+import {
+  getVisit,
+  type NextStep,
+  type RemovedItem,
+  type SummaryItem,
+  type Visit,
+} from '../../../storage/visits';
+import { hasDoctorLines, transcriptLines } from '../../../summary/transcript';
 import { roleOf, speakerLabel, speakerOverview } from '../../../transcript/speakers';
 import { formatDuration } from '../../../utils/time';
 
@@ -28,6 +36,7 @@ export default function VisitScreen() {
 
   const reload = useCallback(() => {
     getVisit(id)
+      .then((v) => (v ? ensureSafetyChecked(v) : v))
       .then(setVisit)
       .catch(() => setVisit(null));
   }, [id]);
@@ -154,6 +163,7 @@ function Transcribing({
 
 function SummarySection({ visit }: { visit: Visit }) {
   const job = useSummaryJob(visit.id);
+  const [devTest, setDevTest] = useState<CheckedSummary | null>(null);
 
   if (job?.state === 'running') {
     return <Summarizing startedAt={job.startedAt} phase={job.phase} onCancel={job.cancel} />;
@@ -200,24 +210,41 @@ function SummarySection({ visit }: { visit: Visit }) {
     );
   }
 
+  const shown = devTest ?? {
+    summary: visit.summary,
+    nextSteps: visit.nextSteps,
+    removed: visit.removed ?? [],
+  };
+
   return (
     <>
+      {devTest && (
+        <View style={[styles.card, styles.devCard]}>
+          <Text style={styles.body}>
+            Developer test: a made-up line naming metformin was added and checked. Nothing is saved.
+          </Text>
+          <Pressable style={styles.secondary} onPress={() => setDevTest(null)}>
+            <Text style={styles.secondaryText}>End the test</Text>
+          </Pressable>
+        </View>
+      )}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>What your doctor said</Text>
-        {visit.summary.length === 0 ? (
+        {shown.summary.length === 0 ? (
           <Text style={styles.body}>No summary points were found in this visit.</Text>
         ) : (
-          visit.summary.map((item, i) => <SummaryLine key={i} item={item} />)
+          shown.summary.map((item, i) => <SummaryLine key={i} item={item} />)
         )}
       </View>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Next steps</Text>
-        {visit.nextSteps.length === 0 ? (
+        {shown.nextSteps.length === 0 ? (
           <Text style={styles.body}>Your doctor did not give any next steps in this recording.</Text>
         ) : (
-          visit.nextSteps.map((item, i) => <SummaryLine key={i} item={item} />)
+          shown.nextSteps.map((item, i) => <SummaryLine key={i} item={item} />)
         )}
       </View>
+      <RemovedSection removed={shown.removed} />
       <Text style={styles.disclaimer}>
         Written on this iPhone from the recording. It can contain mistakes. It is not medical advice;
         check with your doctor if anything is unclear.
@@ -225,7 +252,73 @@ function SummarySection({ visit }: { visit: Visit }) {
       <Pressable style={styles.secondary} onPress={() => void summarizeVisit(visit.id)}>
         <Text style={styles.secondaryText}>Write the summary again</Text>
       </Pressable>
+      {__DEV__ && !devTest && (
+        <Pressable style={styles.secondary} onPress={() => setDevTest(safetyCheckDevTest(visit))}>
+          <Text style={styles.secondaryText}>Test the safety check (developer)</Text>
+        </Pressable>
+      )}
     </>
+  );
+}
+
+/**
+ * Developer-only: adds a summary line naming a medicine the doctor never
+ * said, quoting a real doctor line so only the medicine check can catch it.
+ */
+function safetyCheckDevTest(visit: Visit): CheckedSummary {
+  const lines = transcriptLines(visit.turns ?? [], visit.speakerMap);
+  const doctorLine = lines
+    .filter((l) => l.speaker === 'Doctor')
+    .sort((a, b) => b.text.length - a.text.length)[0];
+  const quote = (doctorLine?.text ?? '').split(/\s+/).slice(0, 20).join(' ');
+  const fake: SummaryItem = { text: 'You will start metformin 500 mg twice a day.', evidence: quote };
+  const checked = checkSummary(
+    { summary: [...(visit.summary ?? []), fake], nextSteps: visit.nextSteps ?? [] },
+    lines,
+  );
+  return { ...checked, removed: [...checked.removed, ...(visit.removed ?? [])] };
+}
+
+function RemovedSection({ removed }: { removed: RemovedItem[] }) {
+  const [open, setOpen] = useState(false);
+
+  if (removed.length === 0) {
+    return (
+      <Text style={styles.safetyOk}>
+        Safety check: every line above matches something your doctor said.
+      </Text>
+    );
+  }
+  return (
+    <View style={[styles.card, styles.removedCard]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((o) => !o)}
+        style={styles.removedHeader}
+      >
+        <Text style={styles.cardTitle}>Removed by safety check ({removed.length})</Text>
+        <Text style={styles.chevron}>{open ? '▲' : '▼'}</Text>
+      </Pressable>
+      <Text style={styles.body}>
+        These were written by the app but could not be matched to what your doctor said, so they
+        were left out.
+      </Text>
+      {open &&
+        removed.map((item, i) => (
+          <View key={i} style={styles.removedItem}>
+            <Text style={styles.removedSection}>
+              {item.section === 'summary' ? 'Summary' : 'Next step'}
+              {item.kind === 'followUp' && item.followUp
+                ? ` · time frame “${describeFollowUp(item.followUp)}” removed`
+                : ''}
+            </Text>
+            <Text style={[styles.itemText, item.kind === 'item' && styles.struck]}>{item.text}</Text>
+            <Text style={styles.reason}>{item.reason}</Text>
+            <Text style={styles.evidence}>Quote given: “{item.evidence}”</Text>
+          </View>
+        ))}
+    </View>
   );
 }
 
@@ -350,6 +443,15 @@ const styles = StyleSheet.create({
   followUp: { fontSize: 14, fontWeight: '600', color: '#1A7F37', marginLeft: 12 },
   evidence: { fontSize: 13, lineHeight: 18, color: '#888', fontStyle: 'italic', marginLeft: 12 },
   disclaimer: { fontSize: 13, lineHeight: 18, color: '#888' },
+  safetyOk: { fontSize: 13, lineHeight: 18, color: '#1A7F37' },
+  removedCard: { backgroundColor: 'rgba(207,34,46,0.08)' },
+  removedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  chevron: { fontSize: 13, color: '#888' },
+  removedItem: { gap: 3, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#ccc' },
+  removedSection: { fontSize: 12, fontWeight: '600', color: '#888', textTransform: 'uppercase' },
+  struck: { textDecorationLine: 'line-through', color: '#666' },
+  reason: { fontSize: 14, lineHeight: 19, color: '#CF222E' },
+  devCard: { backgroundColor: 'rgba(191,135,0,0.15)' },
   transcript: { gap: 8, marginTop: 4 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: '#888', textTransform: 'uppercase' },
   turn: { borderRadius: 12, padding: 12, gap: 4, backgroundColor: 'rgba(127,127,127,0.08)' },

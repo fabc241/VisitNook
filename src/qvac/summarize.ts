@@ -2,6 +2,7 @@ import { calcTokens, cancel, completion } from '@qvac/sdk';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSyncExternalStore } from 'react';
 
+import { checkSummary, type CheckedSummary } from '../guardrails/check';
 import { getVisit, updateVisit, type Visit } from '../storage/visits';
 import { concatResults, parseSummary, type SummaryResult } from '../summary/parse';
 import {
@@ -279,14 +280,17 @@ export async function summarizeVisit(visitId: string): Promise<Visit | null> {
       `[summary] ${visitId}: ${result.summary.length} summary items, ` +
         `${result.nextSteps.length} next steps in ${Date.now() - started} ms`,
     );
+    const checked = checkSummary(result, lines);
+    logCheck(visitId, checked);
     const saved = await updateVisit(visitId, (v) => {
       // The voices were changed while this ran; this result is stale.
       if (JSON.stringify(v.speakerMap) !== JSON.stringify(speakerMap)) return v;
       return {
         ...v,
         status: 'summarized',
-        summary: result.summary,
-        nextSteps: result.nextSteps,
+        summary: checked.summary,
+        nextSteps: checked.nextSteps,
+        removed: checked.removed,
         summarizedAt: new Date().toISOString(),
       };
     });
@@ -304,4 +308,37 @@ export async function summarizeVisit(visitId: string): Promise<Visit | null> {
     deactivateKeepAwake(KEEP_AWAKE_TAG);
     await unloadAll().catch(() => undefined);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Safety check
+// ---------------------------------------------------------------------------
+
+/** Counts only: the text of a summary is never logged. */
+function logCheck(visitId: string, checked: CheckedSummary): void {
+  const items = checked.removed.filter((r) => r.kind === 'item').length;
+  const timeFrames = checked.removed.length - items;
+  console.log(
+    `[safety] ${visitId}: kept ${checked.summary.length} summary items and ` +
+      `${checked.nextSteps.length} next steps; removed ${items} items and ${timeFrames} time frames`,
+  );
+}
+
+/**
+ * A summary saved before the safety check existed has no `removed` list.
+ * It is checked (no model needed) the first time the visit is opened.
+ */
+export async function ensureSafetyChecked(visit: Visit): Promise<Visit> {
+  if (!visit.summary || !visit.nextSteps || visit.removed || !visit.turns || !visit.speakerMap) {
+    return visit;
+  }
+  return updateVisit(visit.id, (v) => {
+    if (!v.summary || !v.nextSteps || v.removed || !v.turns || !v.speakerMap) return v;
+    const checked = checkSummary(
+      { summary: v.summary, nextSteps: v.nextSteps },
+      transcriptLines(v.turns, v.speakerMap),
+    );
+    logCheck(v.id, checked);
+    return { ...v, ...checked };
+  });
 }

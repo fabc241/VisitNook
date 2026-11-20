@@ -29,6 +29,20 @@ export type FollowUp = { amount: number; unit: FollowUpUnit };
 
 export type NextStep = SummaryItem & { followUp?: FollowUp };
 
+/**
+ * Something the safety check took out of the summary. `kind: 'item'` removes
+ * the whole line; `kind: 'followUp'` keeps the next step but drops its time frame.
+ */
+export type RemovedItem = {
+  section: 'summary' | 'nextSteps';
+  kind: 'item' | 'followUp';
+  text: string;
+  evidence: string;
+  followUp?: FollowUp;
+  /** Plain-English reason shown to the patient. */
+  reason: string;
+};
+
 /** Stored as `visits/<id>/visit.json`. Later steps add removed items, reminders, etc. */
 export type Visit = {
   id: string;
@@ -43,6 +57,8 @@ export type Visit = {
   transcribedAt?: string;
   summary?: SummaryItem[];
   nextSteps?: NextStep[];
+  /** What the safety check removed. Present once the summary has been checked. */
+  removed?: RemovedItem[];
   /** ISO timestamp of the last successful summary. */
   summarizedAt?: string;
 };
@@ -127,7 +143,13 @@ export async function updateVisit(id: string, change: (visit: Visit) => Visit): 
 
 /** The visit without its summary. Used whenever the transcript or the voice choice changes. */
 export function withoutSummary(visit: Visit): Visit {
-  const { summary: _summary, nextSteps: _nextSteps, summarizedAt: _summarizedAt, ...rest } = visit;
+  const {
+    summary: _summary,
+    nextSteps: _nextSteps,
+    removed: _removed,
+    summarizedAt: _summarizedAt,
+    ...rest
+  } = visit;
   return { ...rest, status: rest.turns ? 'transcribed' : rest.status };
 }
 
