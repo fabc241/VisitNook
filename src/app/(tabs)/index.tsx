@@ -83,7 +83,7 @@ export default function VisitsScreen() {
       }
       Alert.alert(
         'Delete this visit?',
-        `“${visit.title}” — the recording, transcript, summary and its search data will be removed from this iPhone. This cannot be undone.`,
+        `“${visit.title}” — the recording, transcript, summary and its search data will be removed from this iPhone, and it stops being shared. This cannot be undone.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -150,6 +150,7 @@ export default function VisitsScreen() {
             <Text style={styles.hint}>Press and hold a visit to delete it.</Text>
           )}
           <ModelsButton />
+          <SharedVisitsButton />
           <ConnectionTestButton />
         </View>
       }
@@ -281,6 +282,16 @@ function ModelsButton() {
     <Link href="/setup" asChild>
       <Pressable style={styles.secondary}>
         <Text style={styles.secondaryText}>On-device models</Text>
+      </Pressable>
+    </Link>
+  );
+}
+
+function SharedVisitsButton() {
+  return (
+    <Link href="/shared-visits" asChild>
+      <Pressable style={styles.secondary}>
+        <Text style={styles.secondaryText}>Shared with people</Text>
       </Pressable>
     </Link>
   );

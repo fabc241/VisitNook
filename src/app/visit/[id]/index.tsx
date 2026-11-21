@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useClipPlayer } from '../../../audio/useClipPlayer';
 import { FollowUpReminder } from '../../../components/FollowUpReminder';
 import { ShareVisit } from '../../../components/ShareVisit';
+import { ShareWithPeople } from '../../../components/ShareWithPeople';
 import { VisitPlayback } from '../../../components/VisitPlayback';
 import { checkSummary, describeFollowUp, type CheckedSummary } from '../../../guardrails/check';
 import {
@@ -268,6 +269,7 @@ function SummarySection({ visit, onChanged }: { visit: Visit; onChanged: () => v
         check with your doctor if anything is unclear.
       </Text>
       {!devTest && canShare(visit) && <ShareVisit visit={visit} />}
+      {!devTest && canShare(visit) && <ShareWithPeople visit={visit} onChanged={onChanged} />}
       <Pressable style={styles.secondary} onPress={() => void summarizeVisit(visit.id)}>
         <Text style={styles.secondaryText}>Write the summary again</Text>
       </Pressable>

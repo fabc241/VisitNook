@@ -51,6 +51,9 @@ export type RemovedItem = {
  */
 export type OpenQuestion = { id: string; text: string; evidence: string };
 
+/** The visit's "Share with people" switches. Kept when the summary is rewritten. */
+export type VisitSharing = { shared: boolean; includeTranscript: boolean };
+
 /** Stored as `visits/<id>/visit.json`. Later steps add removed items, reminders, etc. */
 export type Visit = {
   id: string;
@@ -81,6 +84,8 @@ export type Visit = {
    * events still exist, and an unchanged step stays marked as added.
    */
   reminders?: Record<string, ReminderRecord>;
+  /** Missing means not shared. What is shared is built in src/share/shared.ts. */
+  sharing?: VisitSharing;
 };
 
 const AUDIO_FILE = 'audio.wav';
@@ -147,9 +152,34 @@ export async function saveRecordedVisit(params: {
   return visit;
 }
 
+/** A visit was written (`visit`) or deleted (`visit: null`). */
+export type VisitChange = { id: string; visit: Visit | null };
+
+const changeListeners = new Set<(change: VisitChange) => void>();
+
+/**
+ * Called after every write or delete. Lets other parts (shared visits) follow
+ * changes without the storage knowing about them.
+ */
+export function onVisitChange(listener: (change: VisitChange) => void): () => void {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+}
+
+function notify(change: VisitChange): void {
+  for (const listener of changeListeners) {
+    try {
+      listener(change);
+    } catch (error) {
+      console.warn('[visits] change listener failed', error);
+    }
+  }
+}
+
 export function writeVisit(visit: Visit): void {
   const file = new File(visitDirectory(visit.id), VISIT_FILE);
   file.write(JSON.stringify(visit, null, 2));
+  notify({ id: visit.id, visit });
 }
 
 /** Reads, changes and writes back one visit. Throws if the visit does not exist. */
@@ -194,6 +224,7 @@ export async function getVisit(id: string): Promise<Visit | null> {
 export function deleteVisit(id: string): void {
   const dir = visitDirectory(id);
   if (dir.exists) dir.delete();
+  notify({ id, visit: null });
 }
 
 /** All visits, newest first. Folders without a readable `visit.json` are skipped. */

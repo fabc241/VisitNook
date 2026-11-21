@@ -1,4 +1,6 @@
 import '../qvac/worker';
+// Keeps shared visits in step with visit changes (starts nothing until a visit is shared).
+import '../p2p/shared';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -34,6 +36,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="visit/[id]/index" options={{ title: 'Visit', headerBackTitle: 'Back' }} />
           <Stack.Screen name="visit/[id]/speakers" options={{ title: 'Which voice is yours?' }} />
+          <Stack.Screen name="shared-visits" options={{ title: 'Shared with people', headerBackTitle: 'Back' }} />
           <Stack.Screen name="connection-test" options={{ title: 'Connection test', headerBackTitle: 'Back' }} />
         </Stack.Protected>
         <Stack.Screen name="setup" options={{ title: 'Models', headerShown: ready }} />

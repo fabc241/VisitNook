@@ -4,12 +4,16 @@
 //
 // Function 1 (connection test): join a Hyperswarm topic made from a test code,
 // report every connection, and pass short text messages both ways.
+// Function 2 (shared visits): keep the patient's shared visits in an encrypted
+// Hyperbee (p2p/shared-store.js).
 //
-// IPC with the app: one JSON object per line, both directions.
+// IPC with the app: one JSON object per line, both directions. A command with
+// an `rid` gets one `{ type: 'reply', rid, ok, result | error }` back.
 
 const Hyperswarm = require('hyperswarm')
 const crypto = require('hypercore-crypto')
 const b4a = require('b4a')
+const SharedStore = require('./shared-store')
 
 const TOPIC_PREFIX = 'visit-notes/connection-test/v1:'
 const MAX_MESSAGE_BYTES = 4096
@@ -20,6 +24,7 @@ module.exports = function start(ipc) {
   let discovery = null
   const peers = new Map() // public key (hex) → { conn, peer, pingsIn, pingsOut, lastHeardAt, connectedAt }
   let inbound = ''
+  const shared = new SharedStore()
 
   function send(message) {
     ipc.write(b4a.from(JSON.stringify(message) + '\n'))
@@ -146,7 +151,35 @@ module.exports = function start(ipc) {
     send({ type: 'sent', text, to: peers.size })
   }
 
+  async function request(message) {
+    switch (message.type) {
+      case 'shared-open':
+        return shared.open({ dir: String(message.dir), coreName: String(message.coreName), encryptionKey: message.encryptionKey || null })
+      case 'shared-close':
+        return shared.close()
+      case 'shared-put':
+        return shared.put(String(message.id), message.record)
+      case 'shared-del':
+        return shared.del(String(message.id))
+      case 'shared-list':
+        return shared.list()
+      case 'shared-check':
+        return shared.check()
+      default:
+        throw new Error(`unknown request: ${message.type}`)
+    }
+  }
+
   async function handle(message) {
+    if (message.rid !== undefined) {
+      try {
+        const result = await request(message)
+        send({ type: 'reply', rid: message.rid, ok: true, result: result === undefined ? null : result })
+      } catch (error) {
+        send({ type: 'reply', rid: message.rid, ok: false, error: errorText(error) })
+      }
+      return
+    }
     try {
       if (message.type === 'start') {
         await startSwarm(String(message.code))
