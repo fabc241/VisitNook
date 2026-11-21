@@ -2,7 +2,12 @@ import { calcTokens, cancel, completion } from '@qvac/sdk';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSyncExternalStore } from 'react';
 
-import { checkSummary, type CheckedSummary } from '../guardrails/check';
+import {
+  checkSummary,
+  SAFETY_CHECK_VERSION,
+  uncheckedResult,
+  type CheckedSummary,
+} from '../guardrails/check';
 import { getVisit, updateVisit, type Visit } from '../storage/visits';
 import { concatResults, parseSummary, type SummaryResult } from '../summary/parse';
 import {
@@ -293,6 +298,7 @@ export async function summarizeVisit(visitId: string): Promise<Visit | null> {
         summary: checked.summary,
         nextSteps: checked.nextSteps,
         removed: checked.removed,
+        safetyCheckVersion: SAFETY_CHECK_VERSION,
         summarizedAt: new Date().toISOString(),
       };
     });
@@ -329,21 +335,23 @@ function logCheck(visitId: string, checked: CheckedSummary): void {
   );
 }
 
+/** The summary has never been checked, or was checked by an older version of the check. */
+function needsCheck(v: Visit): v is Visit & Required<Pick<Visit, 'summary' | 'nextSteps' | 'turns' | 'speakerMap'>> {
+  if (!v.summary || !v.nextSteps || !v.turns || !v.speakerMap) return false;
+  return !v.removed || (v.safetyCheckVersion ?? 1) < SAFETY_CHECK_VERSION;
+}
+
 /**
- * A summary saved before the safety check existed has no `removed` list.
- * It is checked (no model needed) the first time the visit is opened.
+ * Checks a saved summary (no model needed) the first time the visit is opened:
+ * one saved before the safety check existed, or one checked by an older
+ * version of it, whose removed items are looked at again.
  */
 export async function ensureSafetyChecked(visit: Visit): Promise<Visit> {
-  if (!visit.summary || !visit.nextSteps || visit.removed || !visit.turns || !visit.speakerMap) {
-    return visit;
-  }
+  if (!needsCheck(visit)) return visit;
   return updateVisit(visit.id, (v) => {
-    if (!v.summary || !v.nextSteps || v.removed || !v.turns || !v.speakerMap) return v;
-    const checked = checkSummary(
-      { summary: v.summary, nextSteps: v.nextSteps },
-      transcriptLines(v.turns, v.speakerMap),
-    );
+    if (!needsCheck(v)) return v;
+    const checked = checkSummary(uncheckedResult(v), transcriptLines(v.turns, v.speakerMap));
     logCheck(v.id, checked);
-    return { ...v, ...checked };
+    return { ...v, ...checked, safetyCheckVersion: SAFETY_CHECK_VERSION };
   });
 }

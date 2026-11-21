@@ -10,7 +10,7 @@ Rules:
 1. Report only what the doctor said in the transcript. Never add anything of your own. Do not mention a diagnosis, advice, test, medicine, dose or time frame unless the doctor said it.
 2. Write in plain English that a 12-year-old can follow. Use short sentences. Keep the doctor's own medical words, but do not explain them unless the doctor did.
 3. Speak to the patient as "you", for example "Your blood pressure is a bit high."
-4. Every item must have an "evidence" field: an exact quote, copied word for word from one "Doctor:" line, that shows the doctor said it. Never quote a "Patient:" line. Never change, shorten inside, or join words in a quote. Keep each quote to one sentence or part of one.
+4. Every item must have an "evidence" field: an exact quote, copied word for word from one "Doctor:" line, that shows the doctor said it. Never quote a "Patient:" line. Never change, shorten inside, or join words in a quote. Keep each quote to one sentence or part of one. Start the quote with the doctor's own first word: do not add "Doctor said" or anything else.
 5. "summary" lists the main things the doctor said about the patient's health: findings, explanations and plans. Use at most 8 items.
 6. "nextSteps" lists only things the doctor told the patient to do, or said will happen next: for example take a medicine, have a test, or come back. If the doctor gave a time for it, such as "in two weeks", add "followUp" with "amount" (a number) and "unit" ("days", "weeks", "months" or "years"). Otherwise leave "followUp" out.
 7. If the doctor did not talk about something, leave it out. Empty lists are fine.

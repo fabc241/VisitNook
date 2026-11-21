@@ -27,6 +27,7 @@ import {
   type PrepStore,
 } from '../../prep/list';
 import { findPrepQuestions, usePrepJob } from '../../qvac/prep';
+import { ensureSafetyChecked } from '../../qvac/summarize';
 import { readPrepStore, writePrepStore } from '../../storage/prep';
 import { listVisits, type Visit } from '../../storage/visits';
 
@@ -49,7 +50,9 @@ export default function PrepScreen() {
   const writing = useRef<Promise<void>>(Promise.resolve());
 
   const reload = useCallback(async () => {
-    const [all, saved] = await Promise.all([listVisits().catch(() => []), readPrepStore()]);
+    const [listed, saved] = await Promise.all([listVisits().catch(() => []), readPrepStore()]);
+    // Summaries checked by an older safety check are checked again first.
+    const all = await Promise.all(listed.map((v) => ensureSafetyChecked(v).catch(() => v)));
     setVisits(all);
     storeRef.current = pruneDone(saved, new Set(all.map((v) => v.id)));
     setStore(storeRef.current);

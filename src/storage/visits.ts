@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import FileProtection from '../../modules/file-protection';
+import type { ReminderRecord } from '../reminders/plan';
 
 export type VisitStatus = 'recorded' | 'transcribed' | 'summarized';
 
@@ -66,12 +67,20 @@ export type Visit = {
   nextSteps?: NextStep[];
   /** What the safety check removed. Present once the summary has been checked. */
   removed?: RemovedItem[];
+  /** `SAFETY_CHECK_VERSION` the summary was checked with; missing means version 1. */
+  safetyCheckVersion?: number;
   /** ISO timestamp of the last successful summary. */
   summarizedAt?: string;
   /** Unanswered patient questions, found for the summary saved at `openQuestionsFor`. */
   openQuestions?: OpenQuestion[];
   /** The `summarizedAt` the open questions belong to; a newer summary means they are looked for again. */
   openQuestionsFor?: string;
+  /**
+   * Follow-ups the patient added to Calendar, keyed by `reminderKey(step)`
+   * (src/reminders/plan.ts). Kept when the summary is rewritten: the calendar
+   * events still exist, and an unchanged step stays marked as added.
+   */
+  reminders?: Record<string, ReminderRecord>;
 };
 
 const AUDIO_FILE = 'audio.wav';
@@ -158,6 +167,7 @@ export function withoutSummary(visit: Visit): Visit {
     summary: _summary,
     nextSteps: _nextSteps,
     removed: _removed,
+    safetyCheckVersion: _safetyCheckVersion,
     summarizedAt: _summarizedAt,
     openQuestions: _openQuestions,
     openQuestionsFor: _openQuestionsFor,

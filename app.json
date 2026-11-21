@@ -36,7 +36,9 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Visit Notes adds follow-up appointments your doctor mentioned, only after you confirm each one."
+          "writeOnlyAccess": true,
+          "calendarPermission": "Visit Notes adds follow-up appointments your doctor mentioned, only after you confirm each one.",
+          "writeOnlyCalendarPermission": "Visit Notes adds follow-up appointments your doctor mentioned, only after you confirm each one. It cannot see what is in your calendar."
         }
       ],
       [

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useClipPlayer } from '../../../audio/useClipPlayer';
+import { FollowUpReminder } from '../../../components/FollowUpReminder';
 import { VisitPlayback } from '../../../components/VisitPlayback';
 import { checkSummary, describeFollowUp, type CheckedSummary } from '../../../guardrails/check';
 import {
@@ -17,6 +18,7 @@ import {
   transcribeVisit,
   useTranscriptionJob,
 } from '../../../qvac/transcribe';
+import { reminderCandidates, reminderKey, type ReminderCandidate } from '../../../reminders/plan';
 import {
   getVisit,
   type NextStep,
@@ -98,7 +100,7 @@ export default function VisitScreen() {
             <Text style={styles.body}>No speech was found in this recording.</Text>
           ) : (
             <>
-              {visit.speakerMap && <SummarySection visit={visit} />}
+              {visit.speakerMap && <SummarySection visit={visit} onChanged={reload} />}
               {!visit.speakerMap ? (
                 <View style={[styles.card, styles.callout]}>
                   <Text style={styles.cardTitle}>Which voice is yours?</Text>
@@ -161,7 +163,7 @@ function Transcribing({
   );
 }
 
-function SummarySection({ visit }: { visit: Visit }) {
+function SummarySection({ visit, onChanged }: { visit: Visit; onChanged: () => void }) {
   const job = useSummaryJob(visit.id);
   const [devTest, setDevTest] = useState<CheckedSummary | null>(null);
 
@@ -215,6 +217,10 @@ function SummarySection({ visit }: { visit: Visit }) {
     nextSteps: visit.nextSteps,
     removed: visit.removed ?? [],
   };
+  // Calendar buttons only for the saved, checked summary, never the developer test.
+  const reminders = new Map<string, ReminderCandidate>(
+    devTest ? [] : reminderCandidates(visit).map((c) => [c.key, c]),
+  );
 
   return (
     <>
@@ -241,7 +247,17 @@ function SummarySection({ visit }: { visit: Visit }) {
         {shown.nextSteps.length === 0 ? (
           <Text style={styles.body}>Your doctor did not give any next steps in this recording.</Text>
         ) : (
-          shown.nextSteps.map((item, i) => <SummaryLine key={i} item={item} />)
+          shown.nextSteps.map((item, i) => {
+            const candidate = reminders.get(reminderKey(item));
+            return (
+              <View key={i}>
+                <SummaryLine item={item} />
+                {candidate && (
+                  <FollowUpReminder visitId={visit.id} candidate={candidate} onAdded={onChanged} />
+                )}
+              </View>
+            );
+          })
         )}
       </View>
       <RemovedSection removed={shown.removed} />

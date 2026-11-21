@@ -2,7 +2,7 @@
 // by something the doctor said; anything else is removed with a reason the
 // patient can read. Pure TypeScript: no React Native imports, unit-tested.
 
-import type { FollowUp, NextStep, RemovedItem, SummaryItem } from '../storage/visits';
+import type { FollowUp, NextStep, RemovedItem, SummaryItem, Visit } from '../storage/visits';
 import type { SummaryResult } from '../summary/parse';
 import type { Line } from '../summary/transcript';
 import {
@@ -26,6 +26,12 @@ export type CheckedSummary = SummaryResult & { removed: RemovedItem[] };
 export const QUOTE_MATCH_THRESHOLD = 0.8;
 /** Shorter quotes ("Yes, okay.") would match almost anything. */
 export const MIN_QUOTE_WORDS = 3;
+
+/**
+ * Bumped whenever the check changes in a way that can change its result.
+ * Saved summaries checked by an older version are checked again on open.
+ */
+export const SAFETY_CHECK_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Entities
@@ -322,6 +328,23 @@ export function quoteOverlap(quote: string[], streamsToSearch: string[][]): numb
   return best / n;
 }
 
+/**
+ * "Doctor said that …", "The doctor says: …", "Dr.: …" at the start of a
+ * quote. The model sometimes narrates the quote instead of copying it.
+ */
+const ATTRIBUTION =
+  /^\s*(?:(?:the|my|your)\s+)?(?:doctor|dr\.?|physician)(?:\s+(?:said|says|told\s+(?:me|you|us|her|him|the\s+patient)|stated|mentioned|explained)(?:\s+that)?\s*[:,]?|\s*:)\s*/i;
+
+/**
+ * The quote without a leading "Doctor said" and without wrapping quote marks.
+ * Taking words off a quote never adds a claim, so this is safe before matching.
+ */
+export function cleanQuote(evidence: string): string {
+  const stripped = evidence.replace(ATTRIBUTION, '');
+  const cleaned = stripped.replace(/^\s*["“'‘]+|["”'’]+\s*$/g, '').trim();
+  return cleaned || evidence.trim();
+}
+
 /** `null` when the quote is found in what the doctor said, else the reason it failed. */
 export function quoteProblem(evidence: string, facts: DoctorFacts): string | null {
   const quote = stemmedTokens(evidence);
@@ -422,6 +445,17 @@ export function followUpSupported(followUp: FollowUp, evidence: string): boolean
   return intervalsIn(evidence).some((found) => sameInterval(found, followUp));
 }
 
+/**
+ * The model left out the time frame but the doctor's quote names exactly one
+ * ("we will check in two weeks"): take it from the quote. Nothing is added
+ * that the doctor did not say.
+ */
+export function withFollowUpFromQuote(step: NextStep): NextStep {
+  const found = intervalsIn(step.evidence);
+  if (found.length !== 1) return step;
+  return { ...step, followUp: found[0] };
+}
+
 export function describeFollowUp({ amount, unit }: FollowUp): string {
   return `in ${amount} ${amount === 1 ? unit.replace(/s$/, '') : unit}`;
 }
@@ -458,15 +492,16 @@ export function itemProblem(
 export function checkSummary(result: SummaryResult, lines: Line[]): CheckedSummary {
   const facts = doctorFacts(lines);
   const removed: RemovedItem[] = [];
+  const clean = <T extends SummaryItem>(item: T): T => ({ ...item, evidence: cleanQuote(item.evidence) });
 
-  const summary = result.summary.filter((item) => {
+  const summary = result.summary.map(clean).filter((item) => {
     const reason = itemProblem(item, 'summary', facts);
     if (reason) removed.push({ section: 'summary', kind: 'item', text: item.text, evidence: item.evidence, reason });
     return !reason;
   });
 
   const nextSteps: NextStep[] = [];
-  for (const step of result.nextSteps) {
+  for (const step of result.nextSteps.map(clean)) {
     const reason = itemProblem(step, 'nextSteps', facts);
     if (reason) {
       removed.push({ section: 'nextSteps', kind: 'item', text: step.text, evidence: step.evidence, reason, followUp: step.followUp });
@@ -485,8 +520,31 @@ export function checkSummary(result: SummaryResult, lines: Line[]): CheckedSumma
       nextSteps.push(rest);
       continue;
     }
-    nextSteps.push(step);
+    nextSteps.push(step.followUp ? step : withFollowUpFromQuote(step));
   }
 
   return { summary, nextSteps, removed };
+}
+
+/**
+ * The model's result again, rebuilt from a checked summary and what the check
+ * removed, so a newer check can look at it. Removed items go after the kept
+ * ones; a removed time frame goes back on its step.
+ */
+export function uncheckedResult(visit: Pick<Visit, 'summary' | 'nextSteps' | 'removed'>): SummaryResult {
+  const removed = visit.removed ?? [];
+  const asItem = (r: RemovedItem): SummaryItem => ({ text: r.text, evidence: r.evidence });
+  const summary = [
+    ...(visit.summary ?? []),
+    ...removed.filter((r) => r.section === 'summary' && r.kind === 'item').map(asItem),
+  ];
+  const nextSteps: NextStep[] = (visit.nextSteps ?? []).map((step) => {
+    const dropped = removed.find((r) => r.kind === 'followUp' && r.text === step.text && r.followUp);
+    return dropped && !step.followUp ? { ...step, followUp: dropped.followUp } : step;
+  });
+  for (const r of removed) {
+    if (r.section !== 'nextSteps' || r.kind !== 'item') continue;
+    nextSteps.push(r.followUp ? { ...asItem(r), followUp: r.followUp } : asItem(r));
+  }
+  return { summary, nextSteps };
 }
