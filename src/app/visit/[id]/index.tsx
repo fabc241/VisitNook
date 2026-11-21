@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { useClipPlayer } from '../../../audio/useClipPlayer';
 import { FollowUpReminder } from '../../../components/FollowUpReminder';
+import { ShareVisit } from '../../../components/ShareVisit';
 import { VisitPlayback } from '../../../components/VisitPlayback';
 import { checkSummary, describeFollowUp, type CheckedSummary } from '../../../guardrails/check';
 import {
@@ -19,6 +20,7 @@ import {
   useTranscriptionJob,
 } from '../../../qvac/transcribe';
 import { reminderCandidates, reminderKey, type ReminderCandidate } from '../../../reminders/plan';
+import { canShare } from '../../../share/visit';
 import {
   getVisit,
   type NextStep,
@@ -265,6 +267,7 @@ function SummarySection({ visit, onChanged }: { visit: Visit; onChanged: () => v
         Written on this iPhone from the recording. It can contain mistakes. It is not medical advice;
         check with your doctor if anything is unclear.
       </Text>
+      {!devTest && canShare(visit) && <ShareVisit visit={visit} />}
       <Pressable style={styles.secondary} onPress={() => void summarizeVisit(visit.id)}>
         <Text style={styles.secondaryText}>Write the summary again</Text>
       </Pressable>
