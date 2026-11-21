@@ -122,6 +122,7 @@ export default function VisitsScreen() {
           </Pressable>
         </View>
         <ModelsButton />
+        <ConnectionTestButton />
       </View>
     );
   }
@@ -149,6 +150,7 @@ export default function VisitsScreen() {
             <Text style={styles.hint}>Press and hold a visit to delete it.</Text>
           )}
           <ModelsButton />
+          <ConnectionTestButton />
         </View>
       }
     />
@@ -279,6 +281,17 @@ function ModelsButton() {
     <Link href="/setup" asChild>
       <Pressable style={styles.secondary}>
         <Text style={styles.secondaryText}>On-device models</Text>
+      </Pressable>
+    </Link>
+  );
+}
+
+// Temporary entry point for function 1 of "Share with people".
+function ConnectionTestButton() {
+  return (
+    <Link href="/connection-test" asChild>
+      <Pressable style={styles.secondary}>
+        <Text style={styles.secondaryText}>Connection test</Text>
       </Pressable>
     </Link>
   );

@@ -8,6 +8,8 @@
     "@qvac/fabric-android-arm64": "0.29.2",
     "@qvac/fabric-ios": "0.29.2",
     "@qvac/sdk": "0.24.0",
+    "b4a": "1.9.0",
+    "bare-stow-host": "0.2.0",
     "expo": "~58.0.26",
     "expo-asset": "~58.0.21",
     "expo-audio": "~58.0.12",
@@ -24,6 +26,8 @@
     "expo-router": "~58.0.32",
     "expo-sharing": "~58.0.23",
     "expo-status-bar": "~58.0.5",
+    "hypercore-crypto": "3.7.0",
+    "hyperswarm": "4.17.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -34,6 +38,7 @@
   "devDependencies": {
     "@types/jest": "30.0.0",
     "@types/react": "~19.3.0",
+    "bare-stow": "0.3.6",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
     "jest": "~30.5.2",
@@ -46,7 +51,10 @@
     "prebuild": "expo prebuild --platform ios",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "p2p:pack": "node p2p/pack.mjs",
+    "p2p:peer": "node p2p/test-peer.mjs",
+    "postinstall": "node p2p/pack.mjs"
   },
   "private": true,
   "jest": {
